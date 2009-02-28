@@ -151,7 +151,7 @@ sub create_auction {
 	my ($auctionid) = $dbh->last_insert_id(undef, undef, "auction", undef);
 	$dbh->commit();
 
-	logit($_[HEAP], "Created auction $auctionid");
+	logit($_[HEAP], "Created auction #$auctionid");
 	$_[KERNEL]->yield("do_something");
 }
 
@@ -180,9 +180,11 @@ sub place_bid {
 
 	$sth->execute($_[HEAP]->{'user'}, $auction_id, $new_bid);
 
+	my ($bid_id) = $dbh->last_insert_id(undef, undef, "bid", undef);
+
 	$dbh->commit();
 
-	logit($_[HEAP], "Placed bid of $new_bid on auction $auction_id");
+	logit($_[HEAP], "Placed bid #$bid_id on auction $auction_id. Value: $new_bid");
 
 	$_[KERNEL]->yield("do_something");
 }
