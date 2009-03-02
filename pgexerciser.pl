@@ -13,6 +13,7 @@ use Getopt::Long;
 my $num_clients;
 my $create_schema;
 my $reset_schema;
+my $dbhost;
 my $dbname;
 my $dbuser;
 my $dbpass;
@@ -24,9 +25,10 @@ GetOptions(
 		'num-clients:i' => \$num_clients,
 		'create-schema' => \$create_schema,
 		'reset-schema' => \$reset_schema,
-		'database' => \$dbname,
-		'user' => \$dbuser,
-		'password' => \$dbpass,
+		'database:s' => \$dbname,
+		'user:s' => \$dbuser,
+		'password:s' => \$dbpass,
+		'host:s' => \$dbhost,
 	  ) or pod2usage ( -verbose => 0 );
 
 
@@ -100,7 +102,10 @@ HERE
 }
 
 sub get_dbh {
-	my $dbh = DBI->connect("dbi:Pg:dbname=$dbname", $dbuser, $dbpass, {AutoCommit => 0});
+
+	my $dsn = "dbi:Pg:dbname=$dbname";
+	$dsn .= ";host=$dbhost" if ($dbhost);
+	my $dbh = DBI->connect($dsn, $dbuser, $dbpass, {AutoCommit => 0, RaiseError => 1});
 	die("Failed to connect to db: $!\n") unless $dbh;
 	return $dbh;
 }
