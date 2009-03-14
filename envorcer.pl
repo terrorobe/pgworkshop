@@ -55,7 +55,7 @@ sub create_environment {
 
 sub cleanup {
 
-	run_command('killall -9 postgres', 'both');
+	run_command('killall -9 postgres', 'both', 1);
 #FIXME: Add additional processes (slony, walmgr, etc)
 
 	wipe_clusters();
@@ -69,7 +69,7 @@ sub wipe_clusters {
 		for my $cluster (@clusters) {
 			run_command('pg_dropcluster ' . $cluster->{'version'} . ' ' . $cluster->{'name'}, $side);
 			# Wipe out possible walmgr backups
-			run_command('rm -r ' . $cluster->{'datadir'} . '.*', $side) if ($side eq 'slave');
+			run_command('rm -r ' . $cluster->{'datadir'} . '.*', $side, 1) if ($side eq 'slave');
 		}
 	}
 }
@@ -109,7 +109,9 @@ sub fetch_clusters {
 
 sub run_command {
 
-	my ($command, $target) = @_;
+	my ($command, $target, $may_fail) = @_;
+
+	$may_fail ||= 0;
 
 	my @commands;
 
@@ -132,6 +134,7 @@ sub run_command {
 		my $rc = $? >> 8;
 
 		print " RC: $rc\n";
+		die ("Aborting, last command failed unexpectedly\n") if ($rc != 0 && $may_fail != 1);
 	}
 }
 
