@@ -6,6 +6,7 @@ use DBD::Pg;
 use POE;
 use Text::Lorem;
 use Getopt::Long;
+use sigtrap qw(die normal-signals);
 
 # TODO:
 # getopt help (pod2usage)
@@ -17,6 +18,8 @@ my $dbhost;
 my $dbname;
 my $dbuser;
 my $dbpass;
+
+my %last_bid = ( 'id' => 0, 'ts' => 0);
 
 my $lorem = Text::Lorem->new();
 
@@ -52,6 +55,13 @@ exercise_db();
 
 print "done\n";
 exit(0);
+
+
+END {
+	if ($last_bid{'id'} > 0) {
+		print "\n\nLast bid was #" . $last_bid{'id'} . " at " . $last_bid{'ts'} . "\n\n";
+	}
+}
 
 ########
 # Subs #
@@ -159,13 +169,17 @@ sub place_bid {
 
     my $dbh = $_[HEAP]->{'dbh'};
 
+    if ($dbh->ping != 1) {
+	    my %status = ( 0 => 'dead', 2 => 'busy', 3 => 'in a transaction', 4 => 'in a failed transaction' );
+	    die "Aborting, database handle is " . $status{$dbh->ping} . "\n";
+    }
+
     my $sql_auctions =
 q|SELECT id, current_bid FROM auction WHERE end_time > NOW() + '60 seconds'::interval|;
 
     my @auctions = @{ $dbh->selectall_arrayref($sql_auctions) };
 
     # Create an auction if there are too few active auctions
-
     if ( !@auctions || @auctions < ( $num_clients / 2 ) ) {
         $_[KERNEL]->yield("create_auction");
         return;
@@ -183,7 +197,13 @@ q|SELECT id, current_bid FROM auction WHERE end_time > NOW() + '60 seconds'::int
 
     my ($bid_id) = $dbh->last_insert_id( undef, undef, "bid", undef );
 
+    my ($timestamp) = $dbh->selectrow_array('SELECT NOW()');
+
     $dbh->commit();
+
+    if ($bid_id > $last_bid{'id'}) {
+	    @last_bid{qw(id ts)} = ($bid_id, $timestamp);
+    }
 
     logit( $_[HEAP],
         "Placed bid #$bid_id on auction $auction_id. Value: $new_bid" );
@@ -217,6 +237,9 @@ sub log_in {
     my $sql = 'SELECT id FROM "user"';
 
     my @userids = @{ $dbh->selectcol_arrayref($sql) };
+
+    # We need to reset the state of the dbh.
+    $dbh->rollback;
 
     if ( @userids && @userids >= $num_clients ) {
 
@@ -255,6 +278,7 @@ sub logit {
 
     printf "%3d: %s\n", $heap->{'sid'}, $text;
 }
+
 
 sub create_schema {
 
