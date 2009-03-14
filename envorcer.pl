@@ -5,26 +5,51 @@ use strict;
 
 my $slave = '10.1.0.11';
 
-#my %environs = (
-#		'logship' => {
-#			'dbname' => 
+my %environs = (
+		'logship' => {
+			'clustername' => 'logship',
+			},
+
+		'walmgr' => {
+			'clustername' => 'walmgr',
+			},
+
+		'slony' => {
+			'clustername' => 'slony',
+			},
+		);
+
 
 # needs to do:
 
-
 # creation:
-# create cluster
-# fix pg_hba
-# create root user
-# create sqlsim database
-# create sqlsim schema
 # environment-specific settings
 # feedback!
 
-cleanup();
+
+create_environment('logship');
 
 sub create_environment {
+
+	my ($environment) = @_;
+
+	my $version = '8.3';
+
+	my $clustername = $environs{$environment}->{'clustername'};
+
 	cleanup();
+
+	run_command("pg_createcluster $version $clustername", 'both');
+
+	run_command('sed --in-place "s/ident sameuser/trust/" ' . "/etc/postgresql/$version/$clustername/pg_hba.conf", 'both');
+
+	run_command("pg_ctlcluster $version $clustername start", 'both');
+
+	run_command('su - postgres -c "createuser --superuser root"', 'both');
+
+	run_command('createdb sqlsim', 'master');
+
+	run_command('/root/pgworkshop/pgexerciser.pl --create-schema', 'master');
 
 }
 
@@ -43,7 +68,8 @@ sub wipe_clusters {
 
 		for my $cluster (@clusters) {
 			run_command('pg_dropcluster ' . $cluster->{'version'} . ' ' . $cluster->{'name'}, $side);
-			run_command('rm -r ' . $cluster->{'datadir'} . '.*', $side);
+			# Wipe out possible walmgr backups
+			run_command('rm -r ' . $cluster->{'datadir'} . '.*', $side) if ($side eq 'slave');
 		}
 	}
 }
@@ -70,7 +96,12 @@ sub fetch_clusters {
 
 		my ($version, $clustername, $port, $status, $owner, $datadir, $logfile) = @elems;
 
-		push @output, { 'version' => $version, 'name' => $clustername, 'datadir' => $datadir };
+		die "Cluster $clustername is not down!\n" if ($status ne 'down');
+
+		push @output, {
+			'version' => $version,
+			'name' => $clustername,
+			'datadir' => $datadir };
 	}
 
 	return @output;
@@ -97,7 +128,7 @@ sub run_command {
 
 		print "Running: $cmd...";
 
-#	my $output = qx/$cmd/;
+		my $output = qx/$cmd/;
 		my $rc = $? >> 8;
 
 		print " RC: $rc\n";
