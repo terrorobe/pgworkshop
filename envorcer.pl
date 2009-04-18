@@ -1,6 +1,13 @@
 #!/usr/bin/perl -w
 
 use strict;
+use Sys::Hostname;
+
+if (hostname() ne 'master1') {
+	print "Your host has the wrong hostname, running this script\n";
+	print "is probably a bad idea. Bailing out.\n";
+	exit 1;
+}
 
 
 my $slave = '10.1.0.11';
