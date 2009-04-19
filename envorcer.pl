@@ -183,9 +183,9 @@ sub create_logship {
 	run_command('mkdir -p /srv/logship-archive', 'slave', 0);
 	run_command('chown -R postgres:postgres /srv/logship-archive', 'slave');
 	run_command('cat /root/pgworkshop/configs/logship/postgresql.conf >> /etc/postgresql/8.3/logship/postgresql.conf', 'master');
-	run_command('scp /root/pgworkshop/configs/logship/recovery.conf postgres@slave1:/var/lib/postgresql/8.3/logship/', 'master');
 	run_command('pg_ctlcluster 8.3 logship stop', 'both');
 	run_command('rsync -avH --delete-excluded --exclude pg_xlog/* /var/lib/postgresql/8.3/logship/ root@slave1:/var/lib/postgresql/8.3/logship', 'master');
+	run_command('scp /root/pgworkshop/configs/logship/recovery.conf postgres@slave1:/var/lib/postgresql/8.3/logship/', 'master');
 
 }
 
