@@ -1,0 +1,3 @@
+# *) is postgres in backup mode?
+# *) is postgres stopped on the slave side?
+rsync -avH --delete --delete-excluded --exclude pg_xlog/*  /var/lib/postgresql/8.3/logship/ root@slave1:/var/lib/postgresql/8.3/logship
