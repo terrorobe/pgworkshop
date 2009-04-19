@@ -269,7 +269,7 @@ sub create_text {
     # $lorem->sentences(5);
     # $lorem->paragraphs(5);
 
-    return $lorem->paragraphs(1);
+    return $lorem->sentences(1);
 }
 
 sub logit {

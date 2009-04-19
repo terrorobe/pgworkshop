@@ -79,7 +79,7 @@ sub create_cluster {
 
 	my $clustername = $environs{$environment}->{'clustername'};
 
-	run_command("pg_createcluster $version $clustername", 'both');
+	run_command("pg_createcluster -p 5432 $version $clustername", 'both');
 
 	run_command('sed --in-place "s/ident sameuser/trust/" ' . "/etc/postgresql/$version/$clustername/pg_hba.conf", 'both');
 
@@ -96,7 +96,8 @@ sub create_cluster {
 sub cleanup {
 
 	run_command('killall -9 postgres', 'both', 1);
-#FIXME: Add additional processes (slony, walmgr, etc)
+	run_command('killall -9 slon', 'master', 1);
+#FIXME: Add additional processes (walmgr, etc)
 
 	wipe_clusters();
 }
@@ -108,8 +109,8 @@ sub wipe_clusters {
 
 		for my $cluster (@clusters) {
 			run_command('pg_dropcluster ' . $cluster->{'version'} . ' ' . $cluster->{'name'}, $side);
-			# Wipe out possible walmgr backups
-			run_command('rm -r ' . $cluster->{'datadir'} . '.*', $side, 1) if ($side eq 'slave');
+			# FIXME: Wipe out possible walmgr backups
+			# run_command('rm -r ' . $cluster->{'datadir'} . '.*', $side, 1) if ($side eq 'slave');
 		}
 	}
 }
@@ -214,5 +215,5 @@ sub create_slony {
 
 	#Setting up slony
 	run_command('cp /root/pgworkshop/configs/slony/slon_tools.conf /etc/slony1/', 'master');
-	run_command(q!echo 'SLON_TOOLS_START_NODES="master1 slave1"' > /etc/default/slony1!, 'master');
+	run_command(q!echo 'SLON_TOOLS_START_NODES="1 2"' > /etc/default/slony1!, 'master');
 }
