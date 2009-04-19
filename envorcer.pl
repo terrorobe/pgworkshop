@@ -64,6 +64,8 @@ sub create_environment {
 	# Create a new postgres cluster
 	create_cluster($environment);
 
+	print "Setting up environment-specific things\n\n";
+
 	# Run post-createcluster commands
 	&{$environs{$environment}->{'setup'}};
 
@@ -203,10 +205,14 @@ sub create_slony {
 	#FIXME: Too lazy to fix quoting issues
 	run_command('scp /etc/postgresql/8.3/slony/postgresql.conf root@slave1:/etc/postgresql/8.3/slony/', 'master');
 	run_command('echo "host    all     all   0/0   trust" >> /etc/postgresql/8.3/slony/pg_hba.conf', 'both');
-	run_command('su - postgres -c "createuser --superuser slony"', 'both');
-	run_command('cp /root/pgworkshop/configs/slony/slon_tools.conf /etc/slony1/', 'master');
 	run_command('pg_ctlcluster 8.3 slony restart', 'both');
+
+	# Preparing slave database
 	run_command('createdb sqlsimslave', 'slave');
+	run_command('su - postgres -c "createuser --superuser slony"', 'both');
 	run_command('pg_dump --schema-only -U slony -h master1 sqlsim | psql -U slony -h slave1 sqlsimslave', 'master');
 
+	#Setting up slony
+	run_command('cp /root/pgworkshop/configs/slony/slon_tools.conf /etc/slony1/', 'master');
+	run_command(q!echo 'SLON_TOOLS_START_NODES="master1 slave1"' > /etc/default/slony1!, 'master');
 }
