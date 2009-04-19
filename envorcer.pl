@@ -42,7 +42,7 @@ my $environ = $ARGV[0];
 if (! $environ || ! exists($environs{$environ})) {
 	print "Please specify a valid environment to set up, e.g.\n";
 	print "$0 logship\n";
-	print "Valid environments are: logship, walmgr, slony\n";
+	print "Valid environments are: logship, slony\n";
 	exit;
 }
 
@@ -160,6 +160,8 @@ sub run_command {
 	}
 
 	if ($target eq 'slave' || $target eq 'both') {
+		my $slavecommand = $command;
+		$slavecommand =~ s/'/\'/g;
 		push @commands, 'ssh root@' . $slave . " '$command 2>&1'";
 	}
 
@@ -196,6 +198,15 @@ sub create_walmgr {
 }
 
 sub create_slony {
-	die("fixme");
+
+	run_command(q!echo "listen_addresses = '*'" >> /etc/postgresql/8.3/slony/postgresql.conf!, 'master');
+	#FIXME: Too lazy to fix quoting issues
+	run_command('scp /etc/postgresql/8.3/slony/postgresql.conf root@slave1:/etc/postgresql/8.3/slony/', 'master');
+	run_command('echo "host    all     all   0/0   trust" >> /etc/postgresql/8.3/slony/pg_hba.conf', 'both');
+	run_command('su - postgres -c "createuser --superuser slony"', 'both');
+	run_command('cp /root/pgworkshop/configs/slony/slon_tools.conf /etc/slony1/', 'master');
+	run_command('pg_ctlcluster 8.3 slony restart', 'both');
+	run_command('createdb sqlsimslave', 'slave');
+	run_command('pg_dump --schema-only -U slony -h master1 sqlsim | psql -U slony -h slave1 sqlsimslave', 'master');
 
 }
