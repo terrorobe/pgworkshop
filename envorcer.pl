@@ -1,9 +1,15 @@
 #!/usr/bin/perl -w
 
+# needs to do:
+
+# creation:
+# environment-specific settings
+# feedback!
+
 use strict;
 use Sys::Hostname;
 
-if (hostname() ne 'master1') {
+if (hostname() ne 'master1' && hostname() ne 'abundantia') {
 	print "Your host has the wrong hostname, running this script\n";
 	print "is probably a bad idea. Bailing out.\n";
 	exit 1;
@@ -15,36 +21,61 @@ my $slave = '10.1.0.11';
 my %environs = (
 		'logship' => {
 			'clustername' => 'logship',
+			'setup' => \&create_logship,
 			},
 
 		'walmgr' => {
 			'clustername' => 'walmgr',
+			'setup' => \&create_walmgr,
 			},
 
 		'slony' => {
 			'clustername' => 'slony',
+			'setup' => \&create_slony,
 			},
 		);
 
 
-# needs to do:
 
-# creation:
-# environment-specific settings
-# feedback!
+my $environ = $ARGV[0];
+
+if (! $environ || ! exists($environs{$environ})) {
+	print "Please specify a valid environment to set up, e.g.\n";
+	print "$0 logship\n";
+	print "Valid environments are: logship, walmgr, slony\n";
+	exit;
+}
+
+create_environment($environ);
+
+exit;
 
 
-create_environment('logship');
+########
+# Subs #
+########
 
 sub create_environment {
+	my ($environment) = @_;
+
+	# Kill and remove any leftover postgres clusters
+	cleanup();
+
+	# Create a new postgres cluster
+	create_cluster($environment);
+
+	# Run post-createcluster commands
+	&{$environs{$environment}->{'setup'}};
+
+}
+
+sub create_cluster {
 
 	my ($environment) = @_;
 
 	my $version = '8.3';
 
 	my $clustername = $environs{$environment}->{'clustername'};
-
-	cleanup();
 
 	run_command("pg_createcluster $version $clustername", 'both');
 
@@ -146,3 +177,20 @@ sub run_command {
 }
 
 
+
+sub create_logship {
+
+	die("fixme");
+
+}
+
+sub create_walmgr {
+
+	die("fixme");
+
+}
+
+sub create_slony {
+	die("fixme");
+
+}
