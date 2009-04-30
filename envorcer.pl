@@ -196,7 +196,8 @@ sub create_logship {
 
 sub create_walmgr {
 
-	die("fixme");
+        run_command('mkdir /srv/walmgr-data', 'slave');
+        run_command('rsync -avH /root/pgworkshop/ root@slave1:/root/pgworkshop', 'master');
 
 }
 
