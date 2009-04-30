@@ -196,9 +196,9 @@ sub create_logship {
 
 sub create_walmgr {
 
-        run_command('su postgres -c "mkdir /srv/walmgr-data"', 'slave');
+        run_command('mkdir /srv/walmgr-data', 'slave');
         run_command('rsync -avH /root/pgworkshop/ root@slave1:/root/pgworkshop', 'master');
-        run_command('chown postgres:postgres /var/lib/postgresql/8.3', 'slave');
+        run_command('chown postgres:postgres /var/lib/postgresql/8.3 /srv/walmgr-data', 'slave');
         run_command('apt-get -y -qq install python-psycopg2', 'both');
 
 }
