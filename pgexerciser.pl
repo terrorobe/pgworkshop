@@ -129,7 +129,7 @@ sub start_client {
 
 sub decide_next_action {
 
-    my $delay = int( rand(10) );
+    my $delay = rand(10);
 
     my @actions = qw (create_auction log_out);
     push @actions, ('place_bid') x 20;
