@@ -22,29 +22,29 @@ my $options;
 my $help;
 my $delay;
 
-my %last_bid = ( 'id' => 0, 'ts' => 0);
+my %last_bid = ( 'id' => 0, 'ts' => 0 );
 
 GetOptions(
     'num-clients|n:i' => \$num_clients,
-    'create-schema' => \$create_schema,
-    'reset-schema'  => \$reset_schema,
+    'create-schema'   => \$create_schema,
+    'reset-schema'    => \$reset_schema,
     'database|d:s'    => \$dbname,
     'user|u:s'        => \$dbuser,
     'password|p:s'    => \$dbpass,
     'host|h:s'        => \$dbhost,
-    'delay:n'	=> \$delay,
-    'options'	=> \$options,
-    'help' => \$help,
+    'delay:n'         => \$delay,
+    'options'         => \$options,
+    'help'            => \$help,
 ) or pod2usage( -verbose => 0 );
 
 pod2usage( -verbose => 1 ) if $options;
 pod2usage( -verbose => 2 ) if $help;
 
-$num_clients = 10 unless (defined $num_clients);
-$delay	= 10 unless (defined $delay);
-$dbname      = 'sqlsim' unless (defined $dbname);
-$dbuser      = '' unless (defined $dbuser);
-$dbpass      = '' unless (defined $dbpass);
+$num_clients = 10       unless ( defined $num_clients );
+$delay       = 10       unless ( defined $delay );
+$dbname      = 'sqlsim' unless ( defined $dbname );
+$dbuser      = ''       unless ( defined $dbuser );
+$dbpass      = ''       unless ( defined $dbpass );
 
 if ($create_schema) {
 
@@ -67,11 +67,11 @@ exit(0);
 # Show information of last successful transaction
 
 END {
-	if ($last_bid{'id'} > 0) {
-		print "\n\n";
-		print "Last bid was #" . $last_bid{'id'} . " at " . $last_bid{'ts'};
-		print "\n\n";
-	}
+    if ( $last_bid{'id'} > 0 ) {
+        print "\n\n";
+        print "Last bid was #" . $last_bid{'id'} . " at " . $last_bid{'ts'};
+        print "\n\n";
+    }
 }
 
 ########
@@ -139,7 +139,7 @@ sub start_client {
 
 sub decide_next_action {
 
-    my $yield_delay = rand($delay) if ($delay > 0);
+    my $yield_delay = rand($delay) if ( $delay > 0 );
 
     my @actions = qw (create_auction log_out);
     push @actions, ('place_bid') x 20;
@@ -149,11 +149,11 @@ sub decide_next_action {
         $action = rand() > 0.75 ? 'create_user' : 'log_in';
     }
 
-    if ($delay > 0) {
-    	$_[KERNEL]->delay( $action => $yield_delay );
+    if ( $delay > 0 ) {
+        $_[KERNEL]->delay( $action => $yield_delay );
     }
     else {
-    	$_[KERNEL]->yield($action);
+        $_[KERNEL]->yield($action);
     }
 }
 
@@ -171,7 +171,11 @@ sub create_auction {
     my $endtime = "NOW() + '$expire_time min'::interval";
     my ($endtime) = $dbh->selectrow_array("SELECT $endtime");
 
-    $sth->execute( $_[HEAP]->{'user'}, create_text(4,8), $start_bid, $endtime );
+    $sth->execute(
+        $_[HEAP]->{'user'},
+        create_text( 4, 8 ),
+        $start_bid, $endtime
+    );
     my ($auction_id) = $sth->fetchrow_array;
 
     $dbh->commit();
@@ -184,9 +188,14 @@ sub place_bid {
 
     my $dbh = $_[HEAP]->{'dbh'};
 
-    if ($dbh->ping != 1) {
-	    my %status = ( 0 => 'dead', 2 => 'busy', 3 => 'in a transaction', 4 => 'in a failed transaction' );
-	    die "Aborting, database handle is " . $status{$dbh->ping} . "\n";
+    if ( $dbh->ping != 1 ) {
+        my %status = (
+            0 => 'dead',
+            2 => 'busy',
+            3 => 'in a transaction',
+            4 => 'in a failed transaction'
+        );
+        die "Aborting, database handle is " . $status{ $dbh->ping } . "\n";
     }
 
     my $sql_auctions =
@@ -202,7 +211,8 @@ q|SELECT id, current_bid FROM auction WHERE end_time > NOW() + '60 seconds'::int
 
     my ( $auction_id, $current_bid ) = @{ $auctions[ rand @auctions ] };
 
-    my $sql = 'INSERT INTO bid (bidder, auction, bid) VALUES (?, ?, ?) RETURNING id';
+    my $sql =
+      'INSERT INTO bid (bidder, auction, bid) VALUES (?, ?, ?) RETURNING id';
 
     my $sth = $dbh->prepare($sql);
 
@@ -216,8 +226,8 @@ q|SELECT id, current_bid FROM auction WHERE end_time > NOW() + '60 seconds'::int
 
     $dbh->commit();
 
-    if ($bid_id > $last_bid{'id'}) {
-	    @last_bid{qw(id ts)} = ($bid_id, $timestamp);
+    if ( $bid_id > $last_bid{'id'} ) {
+        @last_bid{qw(id ts)} = ( $bid_id, $timestamp );
     }
 
     logit( $_[HEAP],
@@ -280,22 +290,22 @@ sub log_out {
 
 sub create_text {
 
-    my ($lower, $upper) = @_;
+    my ( $lower, $upper ) = @_;
 
-    die '$lower is invalid' if ((! defined $lower) || $lower <= 0);
-    die '$upper is invalid' if (defined $upper && $upper < $lower);
+    die '$lower is invalid' if ( ( !defined $lower ) || $lower <= 0 );
+    die '$upper is invalid' if ( defined $upper && $upper < $lower );
 
     my $count = $lower;
 
-    if (defined $upper) {
-        $count = $lower + (int(rand($upper - $lower + 1)));
+    if ( defined $upper ) {
+        $count = $lower + ( int( rand( $upper - $lower + 1 ) ) );
     }
 
     my $random_string = '';
-    
-    for (1 .. $count) {
 
-        if (length($random_string)) {
+    for ( 1 .. $count ) {
+
+        if ( length($random_string) ) {
             $random_string .= ' ';
         }
         $random_string .= random_regex('\w{3,15}');
@@ -311,7 +321,6 @@ sub logit {
 
     printf "%3d: %s\n", $heap->{'sid'}, $text;
 }
-
 
 sub create_schema {
 
