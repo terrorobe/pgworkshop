@@ -102,6 +102,9 @@ sub cleanup {
 	run_command('killall -9 slon', 'master', 1);
 	run_command('killall -9 walmgr.py', 'master', 1);
 
+	# Clean up residues from logshipping environments
+	run_command('rm -f -r /srv/logship-archive /srv/walmgr-data', 'slave', 1);
+
 	wipe_clusters();
 }
 
@@ -111,8 +114,15 @@ sub wipe_clusters {
 		my @clusters = fetch_clusters($side);
 
 		for my $cluster (@clusters) {
+			if ($cluster->{'name'} !~ m/^(?:logship|walmgr|slony)$/) {
+				die "Unknown cluster " . $cluster->{'name'} . " found. Bailing out.\n" 
+			}
+
+			# Dropping cluster
 			run_command('pg_dropcluster ' . $cluster->{'version'} . ' ' . $cluster->{'name'}, $side);
-			run_command('rm -r ' . $cluster->{'datadir'} . '.*', $side, 1) if ($side eq 'slave');
+
+			# Wipe out potential walmgr backup copies
+			run_command('rm -f -r ' . $cluster->{'datadir'} . '.*', $side, 1) if ($side eq 'slave' && $cluster->{'name'} eq 'walmgr');
 		}
 	}
 }
