@@ -488,6 +488,8 @@ Each client will have a separate connection to the database and run in a separat
 
 Each client will sleep for a random amount of time between actions. This option sets the upper boundary of the random delay, the lower boundary is always 0.
 
+Setting the delay to 0 will cause B<pgexerciser> to work as fast as possible.
+
 =item B<--create-schema>
 
 Creates the necessary tables, sequences and stored procedures for B<pgexerciser>
