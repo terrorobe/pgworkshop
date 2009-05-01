@@ -1,10 +1,12 @@
 #!/usr/bin/perl -w
 
+# Michael Renner <michael.renner@amd.co.at>
+
 use strict;
 
 use DBD::Pg;
 use POE;
-use Text::Lorem;
+use String::Random qw(random_regex);
 use Getopt::Long;
 use sigtrap qw(die normal-signals);
 
@@ -20,8 +22,6 @@ my $dbuser;
 my $dbpass;
 
 my %last_bid = ( 'id' => 0, 'ts' => 0);
-
-my $lorem = Text::Lorem->new();
 
 GetOptions(
     'num-clients:i' => \$num_clients,
@@ -157,7 +157,7 @@ sub create_auction {
     my $endtime = "NOW() + '$expire_time min'::interval";
     my ($endtime) = $dbh->selectrow_array("SELECT $endtime");
 
-    $sth->execute( $_[HEAP]->{'user'}, create_text(), $start_bid, $endtime );
+    $sth->execute( $_[HEAP]->{'user'}, create_text(4,10), $start_bid, $endtime );
     my ($auctionid) = $dbh->last_insert_id( undef, undef, "auction", undef );
     $dbh->commit();
 
@@ -219,7 +219,7 @@ sub create_user {
 
     my $sth = $dbh->prepare($sql_insert);
 
-    $sth->execute( $lorem->words(3) );
+    $sth->execute( create_text(3) );
     my ($userid) = $dbh->last_insert_id( undef, undef, "user", undef );
     $dbh->commit();
 
@@ -265,11 +265,29 @@ sub log_out {
 
 sub create_text {
 
-    # $lorem->words(5);
-    # $lorem->sentences(5);
-    # $lorem->paragraphs(5);
+    my ($lower, $upper) = @_;
 
-    return $lorem->sentences(1);
+    die '$lower is invalid' if ((! defined $lower) || $lower <= 0);
+    die '$upper is invalid' if (defined $upper && $upper < $lower);
+
+    my $count = $lower;
+
+    if (defined $upper) {
+        $count = $lower + (int(rand($upper - $lower + 1)));
+    }
+
+    my $random_string = '';
+    
+    for (1 .. $count) {
+
+        if length($random_string) {
+            $random_string =. ' ';
+        }
+        $random_string =. random_regex('\w{3,15}');
+
+    }
+
+    return $random_string;
 }
 
 sub logit {

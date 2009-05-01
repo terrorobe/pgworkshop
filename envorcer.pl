@@ -1,5 +1,7 @@
 #!/usr/bin/perl -w
 
+# Michael Renner <michael.renner@amd.co.at>
+
 # needs to do:
 
 # creation:
