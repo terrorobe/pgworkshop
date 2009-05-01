@@ -5,247 +5,288 @@
 use strict;
 use Sys::Hostname;
 
-if (hostname() ne 'master1' && hostname() ne 'abundantia') {
-	print "Your host has the wrong hostname, running this script\n";
-	print "is probably a bad idea. Bailing out.\n";
-	exit 1;
+if ( hostname() ne 'master1' && hostname() ne 'abundantia' ) {
+    print "Your host has the wrong hostname, running this script\n";
+    print "is probably a bad idea. Bailing out.\n";
+    exit 1;
 }
-
 
 my $slave = 'slave1';
 
 my %environs = (
-		'logship' => {
-			'clustername' => 'logship',
-			'setup' => \&create_logship,
-			},
+    'logship' => {
+        'clustername' => 'logship',
+        'setup'       => \&create_logship,
+    },
 
-		'walmgr' => {
-			'clustername' => 'walmgr',
-			'setup' => \&create_walmgr,
-			},
+    'walmgr' => {
+        'clustername' => 'walmgr',
+        'setup'       => \&create_walmgr,
+    },
 
-		'slony' => {
-			'clustername' => 'slony',
-			'setup' => \&create_slony,
-			},
-		);
-
-
+    'slony' => {
+        'clustername' => 'slony',
+        'setup'       => \&create_slony,
+    },
+);
 
 my $environ = $ARGV[0];
 
-if (! $environ || ! exists($environs{$environ})) {
-	print "Please specify a valid environment to set up, e.g.\n";
-	print "$0 logship\n";
-	print "Valid environments are: logship, slony, walmgr\n";
-	exit;
+if ( !$environ || !exists( $environs{$environ} ) ) {
+    print "Please specify a valid environment to set up, e.g.\n";
+    print "$0 logship\n";
+    print "Valid environments are: logship, slony, walmgr\n";
+    exit;
 }
 
 create_environment($environ);
 
 exit;
 
-
 ########
 # Subs #
 ########
 
 sub create_environment {
-	my ($environment) = @_;
+    my ($environment) = @_;
 
-	# Kill and remove any leftover postgres clusters
-	cleanup();
+    # Kill and remove any leftover postgres clusters
+    cleanup();
 
-	# Create a new postgres cluster
-	create_cluster($environment);
+    # Create a new postgres cluster
+    create_cluster($environment);
 
-	print "Setting up environment-specific things\n\n";
+    print "Setting up environment-specific things\n\n";
 
-	# Run post-createcluster commands
-	&{$environs{$environment}->{'setup'}};
+    # Run post-createcluster commands
+    &{ $environs{$environment}->{'setup'} };
 
 }
 
 sub create_cluster {
 
-	my ($environment) = @_;
+    my ($environment) = @_;
 
-	my $version = '8.3';
+    my $version = '8.3';
 
-	my $clustername = $environs{$environment}->{'clustername'};
+    my $clustername = $environs{$environment}->{'clustername'};
 
-	# Create a new cluster, hardcoded port 5432 because Debians setup scripts sometimes misdetect the port as already used.
-	run_command("pg_createcluster -p 5432 $version $clustername", 'both');
+# Create a new cluster, hardcoded port 5432 because Debians setup scripts sometimes misdetect the port as already used.
+    run_command( "pg_createcluster -p 5432 $version $clustername", 'both' );
 
-	# Enabling full access for local users
-	run_command('sed --in-place "s/ident sameuser/trust/" ' . "/etc/postgresql/$version/$clustername/pg_hba.conf", 'both');
+    # Enabling full access for local users
+    run_command(
+        'sed --in-place "s/ident sameuser/trust/" '
+          . "/etc/postgresql/$version/$clustername/pg_hba.conf",
+        'both'
+    );
 
-	# Starting up the databases
-	run_command("pg_ctlcluster $version $clustername start", 'both');
+    # Starting up the databases
+    run_command( "pg_ctlcluster $version $clustername start", 'both' );
 
-	# Creating a dedicated account for the root user
-	run_command('su - postgres -c "createuser --superuser root"', 'both');
+    # Creating a dedicated account for the root user
+    run_command( 'su - postgres -c "createuser --superuser root"', 'both' );
 
-	# Creating a database for pgexerciser
-	run_command('createdb sqlsim', 'master');
+    # Creating a database for pgexerciser
+    run_command( 'createdb sqlsim', 'master' );
 
-	# Creating the schema for pgexerciser
-	run_command('/root/pgworkshop/pgexerciser --create-schema', 'master');
+    # Creating the schema for pgexerciser
+    run_command( '/root/pgworkshop/pgexerciser --create-schema', 'master' );
 
 }
 
 sub cleanup {
 
-	# Kill all leftover processes the hard way.
-	run_command('killall -9 postgres', 'both', 1);
-	run_command('killall -9 slon', 'master', 1);
-	run_command('killall -9 walmgr.py', 'master', 1);
+    # Kill all leftover processes the hard way.
+    run_command( 'killall -9 postgres',  'both',   1 );
+    run_command( 'killall -9 slon',      'master', 1 );
+    run_command( 'killall -9 walmgr.py', 'master', 1 );
 
-	# Clean up residues from logshipping environments
-	run_command('rm -f -r /srv/logship-archive /srv/walmgr-data', 'slave', 1);
+    # Clean up residues from logshipping environments
+    run_command( 'rm -f -r /srv/logship-archive /srv/walmgr-data', 'slave', 1 );
 
-	wipe_clusters();
+    wipe_clusters();
 }
 
 sub wipe_clusters {
 
-	for my $side (qw(master slave)) {
-		my @clusters = fetch_clusters($side);
+    for my $side (qw(master slave)) {
+        my @clusters = fetch_clusters($side);
 
-		for my $cluster (@clusters) {
-			if ($cluster->{'name'} !~ m/^(?:logship|walmgr|slony)$/) {
-				die "Unknown cluster " . $cluster->{'name'} . " found. Bailing out.\n" 
-			}
+        for my $cluster (@clusters) {
+            if ( $cluster->{'name'} !~ m/^(?:logship|walmgr|slony)$/ ) {
+                die "Unknown cluster "
+                  . $cluster->{'name'}
+                  . " found. Bailing out.\n";
+            }
 
-			# Dropping cluster
-			run_command('pg_dropcluster ' . $cluster->{'version'} . ' ' . $cluster->{'name'}, $side);
+            # Dropping cluster
+            run_command(
+                'pg_dropcluster '
+                  . $cluster->{'version'} . ' '
+                  . $cluster->{'name'},
+                $side
+            );
 
-			# Wipe out potential walmgr backup copies
-			run_command('rm -f -r ' . $cluster->{'datadir'} . '.*', $side, 1) if ($side eq 'slave' && $cluster->{'name'} eq 'walmgr');
-		}
-	}
+            # Wipe out potential walmgr backup copies
+            run_command( 'rm -f -r ' . $cluster->{'datadir'} . '.*', $side, 1 )
+              if ( $side eq 'slave' && $cluster->{'name'} eq 'walmgr' );
+        }
+    }
 }
 
 sub fetch_clusters {
 
-	my ($side) = @_;
+    my ($side) = @_;
 
-	my $cmd = 'pg_lsclusters';
+    my $cmd = 'pg_lsclusters';
 
-	$cmd = 'ssh root@' . $slave . " $cmd" if ($side eq 'slave');
+    $cmd = 'ssh root@' . $slave . " $cmd" if ( $side eq 'slave' );
 
-	my @input = qx/$cmd/;
-	shift @input;
+    my @input = qx/$cmd/;
+    shift @input;
 
-	my @output;
+    my @output;
 
-	for my $line (@input) {
-		chomp $line;
+    for my $line (@input) {
+        chomp $line;
 
-		my @elems = split /\s+/, $line;
+        my @elems = split /\s+/, $line;
 
-		die "Failed to split pg_lsclusters output, got " . @elems . " instead of 7 fields\n" if (@elems != 7);
+        die "Failed to split pg_lsclusters output, got " 
+          . @elems
+          . " instead of 7 fields\n"
+          if ( @elems != 7 );
 
-		my ($version, $clustername, $port, $status, $owner, $datadir, $logfile) = @elems;
+        my ( $version, $clustername, $port, $status, $owner, $datadir,
+            $logfile ) = @elems;
 
-		die "Cluster $clustername is not down!\n" if ($status ne 'down');
+        die "Cluster $clustername is not down!\n" if ( $status ne 'down' );
 
-		push @output, {
-			'version' => $version,
-			'name' => $clustername,
-			'datadir' => $datadir };
-	}
+        push @output,
+          {
+            'version' => $version,
+            'name'    => $clustername,
+            'datadir' => $datadir
+          };
+    }
 
-	return @output;
+    return @output;
 }
 
 sub run_command {
 
-	my ($command, $target, $may_fail) = @_;
+    my ( $command, $target, $may_fail ) = @_;
 
-	$may_fail ||= 0;
+    $may_fail ||= 0;
 
-	my @commands;
+    my @commands;
 
-	die "Unkown target $target\n" unless ($target =~ m/^(?:master|slave|both)$/);
+    die "Unkown target $target\n"
+      unless ( $target =~ m/^(?:master|slave|both)$/ );
 
-	if ($target eq 'master' || $target eq 'both') {
-		push @commands, "$command 2>&1";
-	}
+    if ( $target eq 'master' || $target eq 'both' ) {
+        push @commands, "$command 2>&1";
+    }
 
-	if ($target eq 'slave' || $target eq 'both') {
-		my $slavecommand = $command;
-		$slavecommand =~ s/'/\'/g;
-		push @commands, 'ssh root@' . $slave . " '$command 2>&1'";
-	}
+    if ( $target eq 'slave' || $target eq 'both' ) {
+        my $slavecommand = $command;
+        $slavecommand =~ s/'/\'/g;
+        push @commands, 'ssh root@' . $slave . " '$command 2>&1'";
+    }
 
+    for my $cmd (@commands) {
 
-	for my $cmd (@commands) {
+        print "Running: $cmd...";
 
-		print "Running: $cmd...";
+        my $output = qx/$cmd/;
+        my $rc     = $? >> 8;
 
-		my $output = qx/$cmd/;
-		my $rc = $? >> 8;
-
-		print " RC: $rc\n";
-		die ("Aborting, last command failed unexpectedly\n") if ($rc != 0 && $may_fail != 1);
-	}
+        print " RC: $rc\n";
+        die("Aborting, last command failed unexpectedly\n")
+          if ( $rc != 0 && $may_fail != 1 );
+    }
 }
-
-
 
 sub create_logship {
 
-	# Create a directory on the slave to drop the completed WAL segments into
-	run_command('mkdir -p /srv/logship-archive', 'slave', 0);
-	run_command('chown -R postgres:postgres /srv/logship-archive', 'slave');
+    # Create a directory on the slave to drop the completed WAL segments into
+    run_command( 'mkdir -p /srv/logship-archive', 'slave', 0 );
+    run_command( 'chown -R postgres:postgres /srv/logship-archive', 'slave' );
 
-	# Enable archive_mode on the master
-	run_command('cat /root/pgworkshop/configs/logship/postgresql.conf >> /etc/postgresql/8.3/logship/postgresql.conf', 'master');
+    # Enable archive_mode on the master
+    run_command(
+'cat /root/pgworkshop/configs/logship/postgresql.conf >> /etc/postgresql/8.3/logship/postgresql.conf',
+        'master'
+    );
 
-	# Stop both servers ...
-	run_command('pg_ctlcluster 8.3 logship stop', 'both');
+    # Stop both servers ...
+    run_command( 'pg_ctlcluster 8.3 logship stop', 'both' );
 
-	# ... to savely copy the database to the slave
-	run_command('rsync -avH --delete-excluded --exclude pg_xlog/* /var/lib/postgresql/8.3/logship/ root@slave1:/var/lib/postgresql/8.3/logship', 'master');
+    # ... to savely copy the database to the slave
+    run_command(
+'rsync -avH --delete-excluded --exclude pg_xlog/* /var/lib/postgresql/8.3/logship/ root@slave1:/var/lib/postgresql/8.3/logship',
+        'master'
+    );
 
-	# Copy an appropriate recovery.conf to the slave
-	run_command('scp /root/pgworkshop/configs/logship/recovery.conf postgres@slave1:/var/lib/postgresql/8.3/logship/', 'master');
+    # Copy an appropriate recovery.conf to the slave
+    run_command(
+'scp /root/pgworkshop/configs/logship/recovery.conf postgres@slave1:/var/lib/postgresql/8.3/logship/',
+        'master'
+    );
 
 }
 
 sub create_walmgr {
 
-	# Create storage directory for walmgr on slave
-        run_command('mkdir /srv/walmgr-data', 'slave');
+    # Create storage directory for walmgr on slave
+    run_command( 'mkdir /srv/walmgr-data', 'slave' );
 
-	# Make extra-sure that the walmgr copy on the slave is current
-        run_command('rsync -avH /root/pgworkshop/ root@slave1:/root/pgworkshop', 'master');
+    # Make extra-sure that the walmgr copy on the slave is current
+    run_command( 'rsync -avH /root/pgworkshop/ root@slave1:/root/pgworkshop',
+        'master' );
 
-	# Fixing some permissions for walmgr to work
-        run_command('chown postgres:postgres /var/lib/postgresql/8.3 /srv/walmgr-data', 'slave');
+    # Fixing some permissions for walmgr to work
+    run_command(
+        'chown postgres:postgres /var/lib/postgresql/8.3 /srv/walmgr-data',
+        'slave' );
 }
 
 sub create_slony {
 
-	# Enable TCP/IP access on both servers
-	run_command('echo "host    all     all   0/0   trust" >> /etc/postgresql/8.3/slony/pg_hba.conf', 'both');
-	run_command(q!echo "listen_addresses = '*'" >> /etc/postgresql/8.3/slony/postgresql.conf!, 'master');
-	#FIXME: Copying the file because trying to properly escape the previous command makes baby jesus cry
-	run_command('scp /etc/postgresql/8.3/slony/postgresql.conf root@slave1:/etc/postgresql/8.3/slony/', 'master');
+    # Enable TCP/IP access on both servers
+    run_command(
+'echo "host    all     all   0/0   trust" >> /etc/postgresql/8.3/slony/pg_hba.conf',
+        'both'
+    );
+    run_command(
+q!echo "listen_addresses = '*'" >> /etc/postgresql/8.3/slony/postgresql.conf!,
+        'master'
+    );
 
-	# Restart servers to activate settings
-	run_command('pg_ctlcluster 8.3 slony restart', 'both');
+#FIXME: Copying the file because trying to properly escape the previous command makes baby jesus cry
+    run_command(
+'scp /etc/postgresql/8.3/slony/postgresql.conf root@slave1:/etc/postgresql/8.3/slony/',
+        'master'
+    );
 
-	# Creating a slony user on both nodes
-	run_command('su - postgres -c "createuser --superuser slony"', 'both');
+    # Restart servers to activate settings
+    run_command( 'pg_ctlcluster 8.3 slony restart', 'both' );
 
-	# Preparing slave database
-	run_command('createdb sqlsimslave', 'slave');
-	run_command('pg_dump --schema-only -U slony -h master1 sqlsim | psql -U slony -h slave1 sqlsimslave', 'master');
+    # Creating a slony user on both nodes
+    run_command( 'su - postgres -c "createuser --superuser slony"', 'both' );
 
-	#Setting up slony
-	run_command('cp /root/pgworkshop/configs/slony/slon_tools.conf /etc/slony1/', 'master');
-	run_command(q!echo 'SLON_TOOLS_START_NODES="1 2"' > /etc/default/slony1!, 'master');
+    # Preparing slave database
+    run_command( 'createdb sqlsimslave', 'slave' );
+    run_command(
+'pg_dump --schema-only -U slony -h master1 sqlsim | psql -U slony -h slave1 sqlsimslave',
+        'master'
+    );
+
+    #Setting up slony
+    run_command(
+        'cp /root/pgworkshop/configs/slony/slon_tools.conf /etc/slony1/',
+        'master' );
+    run_command( q!echo 'SLON_TOOLS_START_NODES="1 2"' > /etc/default/slony1!,
+        'master' );
 }
