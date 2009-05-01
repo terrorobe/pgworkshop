@@ -2,12 +2,6 @@
 
 # Michael Renner <michael.renner@amd.co.at>
 
-# needs to do:
-
-# creation:
-# environment-specific settings
-# feedback!
-
 use strict;
 use Sys::Hostname;
 
@@ -44,7 +38,7 @@ my $environ = $ARGV[0];
 if (! $environ || ! exists($environs{$environ})) {
 	print "Please specify a valid environment to set up, e.g.\n";
 	print "$0 logship\n";
-	print "Valid environments are: logship, slony\n";
+	print "Valid environments are: logship, slony, walmgr\n";
 	exit;
 }
 
@@ -81,25 +75,32 @@ sub create_cluster {
 
 	my $clustername = $environs{$environment}->{'clustername'};
 
+	# Create a new cluster, hardcoded port 5432 because Debians setup scripts sometimes misdetect the port as already used.
 	run_command("pg_createcluster -p 5432 $version $clustername", 'both');
 
+	# Enabling full access for local users
 	run_command('sed --in-place "s/ident sameuser/trust/" ' . "/etc/postgresql/$version/$clustername/pg_hba.conf", 'both');
 
+	# Starting up the databases
 	run_command("pg_ctlcluster $version $clustername start", 'both');
 
+	# Creating a dedicated account for the root user
 	run_command('su - postgres -c "createuser --superuser root"', 'both');
 
+	# Creating a database for pgexerciser
 	run_command('createdb sqlsim', 'master');
 
-	run_command('/root/pgworkshop/pgexerciser.pl --create-schema', 'master');
+	# Creating the schema for pgexerciser
+	run_command('/root/pgworkshop/pgexerciser --create-schema', 'master');
 
 }
 
 sub cleanup {
 
+	# Kill all leftover processes the hard way.
 	run_command('killall -9 postgres', 'both', 1);
 	run_command('killall -9 slon', 'master', 1);
-#FIXME: Add additional processes (walmgr, etc)
+	run_command('killall -9 walmgr.py', 'master', 1);
 
 	wipe_clusters();
 }
@@ -111,8 +112,7 @@ sub wipe_clusters {
 
 		for my $cluster (@clusters) {
 			run_command('pg_dropcluster ' . $cluster->{'version'} . ' ' . $cluster->{'name'}, $side);
-			# FIXME: Wipe out possible walmgr backups
-			# run_command('rm -r ' . $cluster->{'datadir'} . '.*', $side, 1) if ($side eq 'slave');
+			run_command('rm -r ' . $cluster->{'datadir'} . '.*', $side, 1) if ($side eq 'slave');
 		}
 	}
 }
@@ -187,35 +187,52 @@ sub run_command {
 
 sub create_logship {
 
+	# Create a directory on the slave to drop the completed WAL segments into
 	run_command('mkdir -p /srv/logship-archive', 'slave', 0);
 	run_command('chown -R postgres:postgres /srv/logship-archive', 'slave');
+
+	# Enable archive_mode on the master
 	run_command('cat /root/pgworkshop/configs/logship/postgresql.conf >> /etc/postgresql/8.3/logship/postgresql.conf', 'master');
+
+	# Stop both servers ...
 	run_command('pg_ctlcluster 8.3 logship stop', 'both');
+
+	# ... to savely copy the database to the slave
 	run_command('rsync -avH --delete-excluded --exclude pg_xlog/* /var/lib/postgresql/8.3/logship/ root@slave1:/var/lib/postgresql/8.3/logship', 'master');
+
+	# Copy an appropriate recovery.conf to the slave
 	run_command('scp /root/pgworkshop/configs/logship/recovery.conf postgres@slave1:/var/lib/postgresql/8.3/logship/', 'master');
 
 }
 
 sub create_walmgr {
 
+	# Create storage directory for walmgr on slave
         run_command('mkdir /srv/walmgr-data', 'slave');
-        run_command('rsync -avH /root/pgworkshop/ root@slave1:/root/pgworkshop', 'master');
-        run_command('chown postgres:postgres /var/lib/postgresql/8.3 /srv/walmgr-data', 'slave');
-        run_command('apt-get -y -qq install python-psycopg2', 'both');
 
+	# Make extra-sure that the walmgr copy on the slave is current
+        run_command('rsync -avH /root/pgworkshop/ root@slave1:/root/pgworkshop', 'master');
+
+	# Fixing some permissions for walmgr to work
+        run_command('chown postgres:postgres /var/lib/postgresql/8.3 /srv/walmgr-data', 'slave');
 }
 
 sub create_slony {
 
-	run_command(q!echo "listen_addresses = '*'" >> /etc/postgresql/8.3/slony/postgresql.conf!, 'master');
-	#FIXME: Too lazy to fix quoting issues
-	run_command('scp /etc/postgresql/8.3/slony/postgresql.conf root@slave1:/etc/postgresql/8.3/slony/', 'master');
+	# Enable TCP/IP access on both servers
 	run_command('echo "host    all     all   0/0   trust" >> /etc/postgresql/8.3/slony/pg_hba.conf', 'both');
+	run_command(q!echo "listen_addresses = '*'" >> /etc/postgresql/8.3/slony/postgresql.conf!, 'master');
+	#FIXME: Copying the file because trying to properly escape the previous command makes baby jesus cry
+	run_command('scp /etc/postgresql/8.3/slony/postgresql.conf root@slave1:/etc/postgresql/8.3/slony/', 'master');
+
+	# Restart servers to activate settings
 	run_command('pg_ctlcluster 8.3 slony restart', 'both');
+
+	# Creating a slony user on both nodes
+	run_command('su - postgres -c "createuser --superuser slony"', 'both');
 
 	# Preparing slave database
 	run_command('createdb sqlsimslave', 'slave');
-	run_command('su - postgres -c "createuser --superuser slony"', 'both');
 	run_command('pg_dump --schema-only -U slony -h master1 sqlsim | psql -U slony -h slave1 sqlsimslave', 'master');
 
 	#Setting up slony
