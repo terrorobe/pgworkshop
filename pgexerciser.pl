@@ -56,6 +56,7 @@ exercise_db();
 print "done\n";
 exit(0);
 
+# Show information of last successful transaction
 
 END {
 	if ($last_bid{'id'} > 0) {
@@ -157,7 +158,7 @@ sub create_auction {
     my $endtime = "NOW() + '$expire_time min'::interval";
     my ($endtime) = $dbh->selectrow_array("SELECT $endtime");
 
-    $sth->execute( $_[HEAP]->{'user'}, create_text(4,10), $start_bid, $endtime );
+    $sth->execute( $_[HEAP]->{'user'}, create_text(4,8), $start_bid, $endtime );
     my ($auctionid) = $dbh->last_insert_id( undef, undef, "auction", undef );
     $dbh->commit();
 
