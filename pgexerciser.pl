@@ -11,9 +11,6 @@ use Getopt::Long;
 use sigtrap qw(die normal-signals);
 use Pod::Usage;
 
-# TODO:
-# getopt help (pod2usage)
-
 my $num_clients;
 my $create_schema;
 my $reset_schema;
@@ -43,11 +40,11 @@ GetOptions(
 pod2usage( -verbose => 1 ) if $options;
 pod2usage( -verbose => 2 ) if $help;
 
-$num_clients ||= 10;
+$num_clients = 10 unless (defined $num_clients);
 $delay	= 10 unless (defined $delay);
-$dbname      ||= 'sqlsim';
-$dbuser      ||= '';
-$dbpass      ||= '';
+$dbname      = 'sqlsim' unless (defined $dbname);
+$dbuser      = '' unless (defined $dbuser);
+$dbpass      = '' unless (defined $dbpass);
 
 if ($create_schema) {
 
