@@ -280,10 +280,10 @@ sub create_text {
     
     for (1 .. $count) {
 
-        if length($random_string) {
-            $random_string =. ' ';
+        if (length($random_string)) {
+            $random_string .= ' ';
         }
-        $random_string =. random_regex('\w{3,15}');
+        $random_string .= random_regex('\w{3,15}');
 
     }
 
