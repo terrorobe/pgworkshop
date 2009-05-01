@@ -147,7 +147,7 @@ sub decide_next_action {
 sub create_auction {
 
     my $sql =
-'INSERT INTO auction (creator, description, current_bid, end_time) VALUES (?, ?, ?, ?)';
+'INSERT INTO auction (creator, description, current_bid, end_time) VALUES (?, ?, ?, ?) RETURNING id';
     my $dbh = $_[HEAP]->{'dbh'};
     my $sth = $dbh->prepare($sql);
 
@@ -159,10 +159,11 @@ sub create_auction {
     my ($endtime) = $dbh->selectrow_array("SELECT $endtime");
 
     $sth->execute( $_[HEAP]->{'user'}, create_text(4,8), $start_bid, $endtime );
-    my ($auctionid) = $dbh->last_insert_id( undef, undef, "auction", undef );
+    my ($auction_id) = $sth->fetchrow_array;
+
     $dbh->commit();
 
-    logit( $_[HEAP], "Created auction #$auctionid" );
+    logit( $_[HEAP], "Created auction #$auction_id" );
     $_[KERNEL]->yield("do_something");
 }
 
@@ -188,7 +189,7 @@ q|SELECT id, current_bid FROM auction WHERE end_time > NOW() + '60 seconds'::int
 
     my ( $auction_id, $current_bid ) = @{ $auctions[ rand @auctions ] };
 
-    my $sql = 'INSERT INTO bid (bidder, auction, bid) VALUES (?, ?, ?)';
+    my $sql = 'INSERT INTO bid (bidder, auction, bid) VALUES (?, ?, ?) RETURNING id';
 
     my $sth = $dbh->prepare($sql);
 
@@ -196,7 +197,7 @@ q|SELECT id, current_bid FROM auction WHERE end_time > NOW() + '60 seconds'::int
 
     $sth->execute( $_[HEAP]->{'user'}, $auction_id, $new_bid );
 
-    my ($bid_id) = $dbh->last_insert_id( undef, undef, "bid", undef );
+    my ($bid_id) = $sth->fetchrow_array;
 
     my ($timestamp) = $dbh->selectrow_array('SELECT NOW()');
 
@@ -216,17 +217,17 @@ sub create_user {
 
     my $dbh = $_[HEAP]->{'dbh'};
 
-    my $sql_insert = 'INSERT INTO "user" (name) VALUES (?)';
+    my $sql_insert = 'INSERT INTO "user" (name) VALUES (?) RETURNING id';
 
     my $sth = $dbh->prepare($sql_insert);
 
     $sth->execute( create_text(3) );
-    my ($userid) = $dbh->last_insert_id( undef, undef, "user", undef );
+    my ($user_id) = $sth->fetchrow_array;
     $dbh->commit();
 
-    logit( $_[HEAP], "Created user $userid" );
+    logit( $_[HEAP], "Created user $user_id" );
 
-    $_[HEAP]->{'user'} = $userid;
+    $_[HEAP]->{'user'} = $user_id;
 
     $_[KERNEL]->yield("do_something");
 }
