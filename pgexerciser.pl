@@ -9,6 +9,7 @@ use POE;
 use String::Random qw(random_regex);
 use Getopt::Long;
 use sigtrap qw(die normal-signals);
+use Pod::Usage;
 
 # TODO:
 # getopt help (pod2usage)
@@ -20,20 +21,30 @@ my $dbhost;
 my $dbname;
 my $dbuser;
 my $dbpass;
+my $options;
+my $help;
+my $delay;
 
 my %last_bid = ( 'id' => 0, 'ts' => 0);
 
 GetOptions(
-    'num-clients:i' => \$num_clients,
+    'num-clients|n:i' => \$num_clients,
     'create-schema' => \$create_schema,
     'reset-schema'  => \$reset_schema,
-    'database:s'    => \$dbname,
-    'user:s'        => \$dbuser,
-    'password:s'    => \$dbpass,
-    'host:s'        => \$dbhost,
+    'database|d:s'    => \$dbname,
+    'user|u:s'        => \$dbuser,
+    'password|p:s'    => \$dbpass,
+    'host|h:s'        => \$dbhost,
+    'delay:n'	=> \$delay,
+    'options'	=> \$options,
+    'help' => \$help,
 ) or pod2usage( -verbose => 0 );
 
+pod2usage( -verbose => 1 ) if $options;
+pod2usage( -verbose => 2 ) if $help;
+
 $num_clients ||= 10;
+$delay	= 10 unless (defined $delay);
 $dbname      ||= 'sqlsim';
 $dbuser      ||= '';
 $dbpass      ||= '';
@@ -60,7 +71,9 @@ exit(0);
 
 END {
 	if ($last_bid{'id'} > 0) {
-		print "\n\nLast bid was #" . $last_bid{'id'} . " at " . $last_bid{'ts'} . "\n\n";
+		print "\n\n";
+		print "Last bid was #" . $last_bid{'id'} . " at " . $last_bid{'ts'};
+		print "\n\n";
 	}
 }
 
@@ -129,7 +142,7 @@ sub start_client {
 
 sub decide_next_action {
 
-    my $delay = rand(10);
+    my $yield_delay = rand($delay) if ($delay > 0);
 
     my @actions = qw (create_auction log_out);
     push @actions, ('place_bid') x 20;
@@ -139,9 +152,12 @@ sub decide_next_action {
         $action = rand() > 0.75 ? 'create_user' : 'log_in';
     }
 
-    $_[KERNEL]->delay( $action => $delay );
-
-    #	$_[KERNEL]->yield($action);
+    if ($delay > 0) {
+    	$_[KERNEL]->delay( $action => $yield_delay );
+    }
+    else {
+    	$_[KERNEL]->yield($action);
+    }
 }
 
 sub create_auction {
@@ -435,3 +451,63 @@ HERE
     $dbh->do($schema);
     $dbh->commit();
 }
+
+__END__
+
+=head1 NAME
+
+pgexerciser - A POE-based PostgreSQL exerciser
+
+=head1 SYNOPSIS
+
+pgexerciser [options]
+
+
+
+   Options:
+  -d, --database		Name of the database to connect to (Default: sqlsim)
+  -h, --host			Host to use when connecting to the database (Default: none)
+  -n, --num-clients		Amount of parallel connections (Default: 10)
+  -u, --user			Username to use when connecting to the database
+  -p, --password		Password to use when connecting to the database
+      --delay			Maximum delay between actions (Default: 10)
+      --create-schema		Create the necessary schema in the database
+      --reset-schema		Reset the pgexerciser schema in the database
+      --options			Show options
+      --help			Show complete documentation
+
+
+=head1 OPTIONS
+
+=over 8
+
+=item B<--num-clients>
+
+Amount of clients to emulate.
+
+Each client will have a separate connection to the database and run in a separate POE session.
+
+=item B<--delay>
+
+Each client will sleep for a random amount of time between actions. This option sets the upper boundary of the random delay, the lower boundary is always 0.
+
+=item B<--create-schema>
+
+Creates the necessary tables, sequences and stored procedures for B<pgexerciser>
+
+=item B<--reset-schema>
+
+Truncates tables and resets sequences to be able to re-run tests from an empty database.
+
+=back
+
+=head1 DESCRIPTION
+
+B<pgexerciser> is a POE-based tool to simulate light workloads on a PostgreSQL database. It uses a schema which reflects a over-simplified auction platform.
+
+It's main goal is not to do benchmarks of a given installation but rather simulate traffic on a database for demonstration or testing purposes. It was written because the author needed sample traffic for demonstrating replication concepts and the existing tools were all targeted at stress testing database systems.
+
+
+=head1 AUTHOR
+
+B<pgexerciser> was written by Michael Renner <michael.renner@amd.co.at>.
