@@ -51,12 +51,14 @@ sub create_environment {
     my ($environment) = @_;
 
     # Kill and remove any leftover postgres clusters
+    print "\nWiping out any existing environments\n\n";
     cleanup();
 
     # Create a new postgres cluster
+    print "\nCreating the new cluster\n\n";
     create_cluster($environment);
 
-    print "Setting up environment-specific things\n\n";
+    print "\nSetting up environment-specific things\n\n";
 
     # Run post-createcluster commands
     &{ $environs{$environment}->{'setup'} };
@@ -100,7 +102,7 @@ sub cleanup {
     # Kill all leftover processes the hard way.
     run_command( 'killall -9 postgres',  'both',   1 );
     run_command( 'killall -9 slon',      'master', 1 );
-    run_command( 'killall -9 walmgr.py', 'master', 1 );
+    run_command( 'killall -9 python', 'master', 1 );
 
     # Clean up residues from logshipping environments
     run_command( 'rm -f -r /srv/logship-archive /srv/walmgr-data', 'slave', 1 );
@@ -114,7 +116,7 @@ sub wipe_clusters {
         my @clusters = fetch_clusters($side);
 
         for my $cluster (@clusters) {
-            if ( $cluster->{'name'} !~ m/^(?:logship|walmgr|slony)$/ ) {
+            if ( $cluster->{'name'} !~ m/^(?:logship|walmgr|slony|main)$/ ) {
                 die "Unknown cluster "
                   . $cluster->{'name'}
                   . " found. Bailing out.\n";
