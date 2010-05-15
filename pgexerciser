@@ -345,7 +345,7 @@ IF maxtime < NOW() THEN
 END IF;
 
 IF maxbid >= NEW.bid THEN
-    RAISE EXCEPTION 'New bid isn\'t higher than current bid';
+    RAISE EXCEPTION 'New bid isn''t higher than current bid';
 END IF;
 
 UPDATE auction SET current_bid = NEW.bid WHERE id = NEW.auction;
